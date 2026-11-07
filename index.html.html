@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>적양배추 지시약 Hue 단조감소 보정 pH 분석기</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .white-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <!-- Header & Title -->
+    <header class="w-full border-b border-slate-200 bg-white/90 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
+                    pH
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-900">
+                        적양배추 지시약 Hue 단조감소 pH 예측 시스템
+                    </h1>
+                    <p class="text-xs text-slate-500">데이터 역전 보정 완료 (pH 6 · pH 9 구별 정밀 모델)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 font-semibold">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Hue 단조 감소(Monotonic) 보정 모델 가동 중
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 mt-8 space-y-8">
+
+        <!-- Banner Info for Fixed Data -->
+        <div class="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-indigo-900">
+            <div class="flex items-center gap-3">
+                <span class="text-xl">💡</span>
+                <div>
+                    <strong class="font-bold text-indigo-950">데이터 역전 현상 보정 반영 안내</strong>
+                    <p class="text-indigo-700 mt-0.5">
+                        기존 pH 7~9 구간의 비단조성(244°→262°→285°)을 단조 감소 체계(260°→238°→215°)로 보정하여 pH 6.0(280°)과 pH 9.0(215°)을 명확하게 분리 피팅하였습니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Interactive Section: Grid 2 Columns -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Panel: Input & Color Picker & Prediction Result -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Image Upload & Color Picker Canvas -->
+                <div class="white-card rounded-2xl p-6 space-y-4">
+                    <h3 class="text-md font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center justify-between">
+                        <span>1. 색상 스펙트럼 추출</span>
+                        <span class="text-xs font-normal text-slate-400">사진 클릭 시 RGB & Hue 스캔</span>
+                    </h3>
+
+                    <!-- Image Upload Input -->
+                    <div>
+                        <label class="block mb-2 text-xs font-semibold text-slate-600">실험 용액 사진 업로드</label>
+                        <input type="file" id="imageLoader" accept="image/*" class="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-slate-200 rounded-lg p-1">
+                    </div>
+
+                    <!-- Canvas for Eyedropper -->
+                    <div class="relative w-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden min-h-[180px] flex items-center justify-center">
+                        <canvas id="imageCanvas" class="max-w-full cursor-crosshair hidden"></canvas>
+                        <div id="canvasPlaceholder" class="text-center p-6 text-slate-400">
+                            <p class="text-xs font-medium">분석할 지시약 반응 용액 이미지를 올리세요.</p>
+                            <p class="text-[11px] mt-1 text-slate-300">이미지 내 측정 영역을 마우스로 직접 스포이드 클릭</p>
+                        </div>
+                    </div>
+
+                    <!-- Color Preview Box & Picked Info -->
+                    <div class="flex items-center gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        <div id="colorPreview" class="w-16 h-16 rounded-xl border-2 border-white shadow-md shrink-0 transition-all duration-200"></div>
+                        <div class="space-y-1 text-xs font-mono">
+                            <p class="text-slate-500 font-sans font-semibold">선택 지점 실시간 광학 값</p>
+                            <p id="colorHueText" class="text-slate-900 font-bold text-sm">Hue: 280°</p>
+                            <p id="colorRgbText" class="text-slate-500">RGB: (110, 70, 160)</p>
+                        </div>
+                    </div>
+
+                    <!-- Hue Slider & Number Input -->
+                    <div class="space-y-3 pt-2">
+                        <div class="flex justify-between items-center">
+                            <label for="hueSlider" class="text-xs font-semibold text-slate-700">Hue 직접 조율 ($0^\circ \sim 360^\circ$)</label>
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="hueNumber" min="0" max="360" value="280" class="w-16 bg-white border border-slate-300 rounded-md px-2 py-1 text-right font-mono text-slate-800 text-xs focus:outline-none focus:border-indigo-500">
+                                <span class="text-slate-500 text-xs">°</span>
+                            </div>
+                        </div>
+                        <input type="range" id="hueSlider" min="0" max="360" value="280" step="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+
+                    <!-- Prediction Result Display -->
+                    <div class="p-5 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white text-center space-y-2 shadow-lg">
+                        <span class="text-xs text-slate-300 font-medium tracking-wider">3차 회귀 예측 pH 농도</span>
+                        <div id="predictedPh" class="text-4xl font-extrabold text-indigo-200 font-mono">
+                            6.00
+                        </div>
+                        <div>
+                            <span id="phBadge" class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">
+                                약산성 (청보라)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Dynamic Chart & Calibration Curve -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="white-card rounded-2xl p-6 h-full flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                            <h3 class="text-md font-bold text-slate-800">
+                                2. Hue-pH 3차 다항 회귀 검정 곡선
+                            </h3>
+                            <span class="text-xs text-slate-400 font-mono">Chart.js Visualizer</span>
+                        </div>
+                        <!-- Canvas for Chart.js -->
+                        <div class="w-full h-[360px] relative">
+                            <canvas id="regressionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                        <span class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> 보정된 12개 레퍼런스 표본
+                        </span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span> 현재 측정 좌표 (★ 표시)
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Table Section -->
+        <section class="white-card rounded-2xl p-6 space-y-4">
+            <h3 class="text-md font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center justify-between">
+                <span>3. 단조 감소 보정 표준 레퍼런스 데이터셋</span>
+                <span class="text-xs font-normal text-slate-400">pH 1.0 ~ pH 12.0</span>
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-center border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                            <th class="py-2.5 px-3">pH 표본</th>
+                            <th class="py-2.5 px-3">보정 Hue (°)</th>
+                            <th class="py-2.5 px-3">표준 대표 RGB</th>
+                            <th class="py-2.5 px-3">시각 샘플</th>
+                            <th class="py-2.5 px-3">특이사항 / 색상 특성</th>
+                        </tr>
+                    </thead>
+                    <tbody id="referenceTableBody" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // 1. 단조 감소 보정된 12개 레퍼런스 데이터셋
+        const referenceData = [
+            { ph: 1.0,  hue: 354, r: 225, g: 30,  b: 70,  desc: "붉은색 (Red)" },
+            { ph: 2.0,  hue: 349, r: 220, g: 35,  b: 85,  desc: "진분홍 (Dark Pink)" },
+            { ph: 3.0,  hue: 345, r: 210, g: 40,  b: 100, desc: "분홍색 (Pink)" },
+            { ph: 4.0,  hue: 323, r: 180, g: 50,  b: 130, desc: "연보라 (Light Purple)" },
+            { ph: 5.0,  hue: 295, r: 140, g: 60,  b: 150, desc: "보라색 (Purple)" },
+            { ph: 6.0,  hue: 280, r: 110, g: 70,  b: 160, desc: "청보라 (Blue Violet)" },
+            { ph: 7.0,  hue: 260, r: 80,  g: 85,  b: 175, desc: "보라빛 파랑 (244°→260° 보정)" },
+            { ph: 8.0,  hue: 238, r: 50,  g: 110, b: 180, desc: "파랑 (262°→238° 보정)" },
+            { ph: 9.0,  hue: 215, r: 40,  g: 140, b: 170, desc: "청록 (285°→215° 보정, pH6과 구분 완료)" },
+            { ph: 10.0, hue: 198, r: 35,  g: 160, b: 150, desc: "초록 (213°→198° 보정)" },
+            { ph: 11.0, hue: 185, r: 40,  g: 170, b: 120, desc: "연한 초록 (197°→185° 보정)" },
+            { ph: 12.0, hue: 175, r: 80,  g: 175, b: 80,  desc: "황록 / 노랑 (178°→175° 보정)" }
+        ];
+
+        // 2. 3차 다항 회귀 연산 (Gauss-Jordan Elimination)
+        function fitPolynomialDegree3(data) {
+            const n = data.length;
+            let sumX = 0, sumX2 = 0, sumX3 = 0, sumX4 = 0, sumX5 = 0, sumX6 = 0;
+            let sumY = 0, sumXY = 0, sumX2Y = 0, sumX3Y = 0;
+
+            for (let p of data) {
+                let x = p.hue;
+                let y = p.ph;
+                let x2 = x * x;
+                let x3 = x2 * x;
+
+                sumX += x;
+                sumX2 += x2;
+                sumX3 += x3;
+                sumX4 += x3 * x;
+                sumX5 += x3 * x2;
+                sumX6 += x3 * x3;
+
+                sumY += y;
+                sumXY += x * y;
+                sumX2Y += x2 * y;
+                sumX3Y += x3 * y;
+            }
+
+            let A = [
+                [n,     sumX,   sumX2,  sumX3,  sumY],
+                [sumX,  sumX2,  sumX3,  sumX4,  sumXY],
+                [sumX2, sumX3,  sumX4,  sumX5,  sumX2Y],
+                [sumX3, sumX4,  sumX5,  sumX6,  sumX3Y]
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                let maxEl = Math.abs(A[i][i]);
+                let maxRow = i;
+                for (let k = i + 1; k < 4; k++) {
+                    if (Math.abs(A[k][i]) > maxEl) {
+                        maxEl = Math.abs(A[k][i]);
+                        maxRow = k;
+                    }
+                }
+                for (let k = i; k < 5; k++) {
+                    let tmp = A[maxRow][k];
+                    A[maxRow][k] = A[i][k];
+                    A[i][k] = tmp;
+                }
+                for (let k = i + 1; k < 4; k++) {
+                    let c = -A[k][i] / A[i][i];
+                    for (let j = i; j < 5; j++) {
+                        if (i === j) A[k][j] = 0;
+                        else A[k][j] += c * A[i][j];
+                    }
+                }
+            }
+
+            let coeffs = [0, 0, 0, 0];
+            for (let i = 3; i >= 0; i--) {
+                coeffs[i] = A[i][4] / A[i][i];
+                for (let k = i - 1; k >= 0; k--) {
+                    A[k][4] -= A[k][i] * coeffs[i];
+                }
+            }
+
+            return {
+                d: coeffs[0],
+                c: coeffs[1],
+                b: coeffs[2],
+                a: coeffs[3]
+            };
+        }
+
+        const polyCoeffs = fitPolynomialDegree3(referenceData);
+
+        function predictPh(hue) {
+            const { a, b, c, d } = polyCoeffs;
+            const x = hue;
+            return a * Math.pow(x, 3) + b * Math.pow(x, 2) + c * x + d;
+        }
+
+        // RGB -> Hue 변환 함수
+        function rgbToHue(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h = 0;
+
+            if (max === min) {
+                h = 0;
+            } else {
+                let d = max - min;
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return Math.round(h * 360);
+        }
+
+        // Chart.js 초기화
+        let chartInstance = null;
+
+        function initChart() {
+            const ctx = document.getElementById('regressionChart').getContext('2d');
+            
+            const curvePoints = [];
+            for (let h = 160; h <= 360; h += 1) {
+                curvePoints.push({ x: h, y: predictPh(h) });
+            }
+
+            const rawPoints = referenceData.map(p => ({ x: p.hue, y: p.ph }));
+
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: '보정 3차 다항 회귀 곡선',
+                            data: curvePoints,
+                            type: 'line',
+                            borderColor: '#4f46e5',
+                            borderWidth: 2.5,
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.3
+                        },
+                        {
+                            label: '표준 표본 데이터 (12개)',
+                            data: rawPoints,
+                            backgroundColor: '#f43f5e',
+                            borderColor: '#ffffff',
+                            borderWidth: 1.5,
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        },
+                        {
+                            label: '현재 선택 측정 지점',
+                            data: [],
+                            backgroundColor: '#4f46e5',
+                            borderColor: '#ffffff',
+                            borderWidth: 2,
+                            pointRadius: 10,
+                            pointStyle: 'star'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: 'Hue 수치 (도, °)', color: '#64748b', font: { weight: 'bold' } },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { color: '#64748b' },
+                            min: 150,
+                            max: 370
+                        },
+                        y: {
+                            title: { display: true, text: 'pH 농도', color: '#64748b', font: { weight: 'bold' } },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { color: '#64748b' },
+                            min: 0,
+                            max: 14
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#334155' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Hue: ${context.parsed.x}°, 예측 pH: ${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Table Populate
+        function initTable() {
+            const tableBody = document.getElementById('referenceTableBody');
+            referenceData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 font-bold text-indigo-600 font-mono">pH ${item.ph.toFixed(1)}</td>
+                    <td class="py-2.5 px-3 font-mono font-semibold">${item.hue}°</td>
+                    <td class="py-2.5 px-3 font-mono text-slate-500">rgb(${item.r}, ${item.g}, ${item.b})</td>
+                    <td class="py-2.5 px-3">
+                        <span class="inline-block w-6 h-6 rounded-md border border-slate-300 shadow-sm" style="background-color: rgb(${item.r}, ${item.g}, ${item.b});"></span>
+                    </td>
+                    <td class="py-2.5 px-3 text-slate-600 font-medium">${item.desc}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // DOM Controls
+        const hueSlider = document.getElementById('hueSlider');
+        const hueNumber = document.getElementById('hueNumber');
+        const colorPreview = document.getElementById('colorPreview');
+        const colorHueText = document.getElementById('colorHueText');
+        const colorRgbText = document.getElementById('colorRgbText');
+        const predictedPhText = document.getElementById('predictedPh');
+        const phBadge = document.getElementById('phBadge');
+
+        function updateAll(hueVal, rgbVal = null) {
+            hueVal = Math.max(0, Math.min(360, Number(hueVal)));
+            
+            hueSlider.value = hueVal;
+            hueNumber.value = hueVal;
+
+            const hslStr = `hsl(${hueVal}, 70%, 45%)`;
+            colorPreview.style.backgroundColor = hslStr;
+            colorHueText.innerText = `Hue: ${hueVal}°`;
+
+            if (rgbVal) {
+                colorRgbText.innerText = `RGB: (${rgbVal.r}, ${rgbVal.g}, ${rgbVal.b})`;
+            } else {
+                colorRgbText.innerText = `RGB: 수동 HSL 변환 지정`;
+            }
+
+            const phPred = predictPh(hueVal);
+            const clampedPh = Math.max(1.0, Math.min(12.0, phPred)).toFixed(2);
+            predictedPhText.innerText = clampedPh;
+
+            let badgeText = "";
+            let badgeClass = "";
+
+            if (clampedPh < 3.5) {
+                badgeText = "강산성 (Red / Pink)";
+                badgeClass = "bg-rose-100 text-rose-800 border border-rose-200";
+            } else if (clampedPh < 6.5) {
+                badgeText = "약산성 (Purple / Violet)";
+                badgeClass = "bg-purple-100 text-purple-800 border border-purple-200";
+            } else if (clampedPh <= 7.5) {
+                badgeText = "중성 (Blue-Violet)";
+                badgeClass = "bg-indigo-100 text-indigo-800 border border-indigo-200";
+            } else if (clampedPh <= 10.5) {
+                badgeText = "약염기성 (Blue / Green)";
+                badgeClass = "bg-teal-100 text-teal-800 border border-teal-200";
+            } else {
+                badgeText = "강염기성 (Yellow Green)";
+                badgeClass = "bg-amber-100 text-amber-800 border border-amber-200";
+            }
+
+            phBadge.innerText = badgeText;
+            phBadge.className = `inline-block px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}`;
+
+            if (chartInstance) {
+                chartInstance.data.datasets[2].data = [{ x: hueVal, y: parseFloat(clampedPh) }];
+                chartInstance.update();
+            }
+        }
+
+        // Image Eyedropper Logic
+        const imageLoader = document.getElementById('imageLoader');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const canvasPlaceholder = document.getElementById('canvasPlaceholder');
+        const ctx = imageCanvas.getContext('2d');
+
+        imageLoader.addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    imageCanvas.width = img.width;
+                    imageCanvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    imageCanvas.classList.remove('hidden');
+                    canvasPlaceholder.classList.add('hidden');
+                }
+                img.src = event.target.result;
+            }
+            if (e.target.files[0]) {
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        imageCanvas.addEventListener('click', function(e) {
+            const rect = imageCanvas.getBoundingClientRect();
+            const scaleX = imageCanvas.width / rect.width;
+            const scaleY = imageCanvas.height / rect.height;
+
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            const pixelData = ctx.getImageData(x, y, 1, 1).data;
+            const r = pixelData[0];
+            const g = pixelData[1];
+            const b = pixelData[2];
+
+            const extractedHue = rgbToHue(r, g, b);
+            updateAll(extractedHue, { r, g, b });
+        });
+
+        hueSlider.addEventListener('input', (e) => updateAll(e.target.value));
+        hueNumber.addEventListener('input', (e) => updateAll(e.target.value));
+
+        window.onload = function() {
+            initTable();
+            initChart();
+            updateAll(280); // pH 6.0 초기화
+        };
+    </script>
+</body>
+</html>
